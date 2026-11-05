@@ -87,7 +87,7 @@ module.exports = async (req, res) => {
       const n = Number(await cmd(db, ['HLEN', K.users]));
       if (n > 0) {
         const code = await cmd(db, ['GET', K.code]);
-        if (!code || String(b.code || '').trim().toUpperCase() !== code) return send(403, { error: 'Mã mời chưa đúng. Hãy hỏi giáo viên đã có tài khoản để lấy mã mời.' });
+        if (!code || String(b.code || '').trim() !== code) return send(403, { error: 'Mã mời chưa đúng (lưu ý mã phân biệt chữ hoa, chữ thường). Hãy hỏi người đã có tài khoản để lấy mã mời.' });
       }
       const salt = crypto.randomBytes(8).toString('hex');
       const u = { email, name, role, salt, hash: hashPw(pw, salt), at: Date.now() };
@@ -114,7 +114,7 @@ module.exports = async (req, res) => {
     if (act === 'get') {
       const [data, rev] = await Promise.all([cmd(db, ['GET', K.data]), cmd(db, ['GET', K.rev])]);
       const out = { me: pub(u), data: data ? JSON.parse(data) : null, rev: Number(rev || 0) };
-      if (u.role === 'gv') out.code = await cmd(db, ['GET', K.code]);
+      out.code = await cmd(db, ['GET', K.code]);
       return send(200, out);
     }
 
@@ -147,8 +147,11 @@ module.exports = async (req, res) => {
     }
 
     if (act === 'newcode') {
-      if (u.role !== 'gv') return send(403, { error: 'Chỉ giáo viên mới đổi được mã mời.' });
-      const code = newCode();
+      let code = newCode();
+      if (b.code != null && String(b.code).trim() !== '') {
+        code = String(b.code).trim();
+        if (!/^[A-Za-z0-9-]{4,20}$/.test(code)) return send(400, { error: 'Mã mời chỉ gồm chữ cái không dấu, số hoặc dấu gạch ngang, dài 4 đến 20 ký tự.' });
+      }
       await cmd(db, ['SET', K.code, code]);
       return send(200, { code });
     }
